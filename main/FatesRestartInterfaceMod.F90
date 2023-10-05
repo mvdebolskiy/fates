@@ -12,6 +12,7 @@ module FatesRestartInterfaceMod
   use FatesConstantsMod, only : nearzero
   use FatesConstantsMod, only : default_regeneration
   use FatesConstantsMod, only : TRS_regeneration
+  use FatesConstantsMod, only : nocomp_bareground
   use FatesGlobals,            only : fates_log
   use FatesGlobals,            only : endrun => fates_endrun
   use FatesIODimensionsMod,    only : fates_io_dimension_type
@@ -3583,6 +3584,7 @@ contains
         ifp = 0
         currentpatch => sites(s)%oldest_patch
         do while (associated(currentpatch))
+          if(currentpatch%nocomp_pft_label.ne.nocomp_bareground) then
            ifp = ifp+1
 
            currentPatch%f_sun      (:,:,:) = 0._r8
@@ -3645,6 +3647,7 @@ contains
 
            end if    ! if the vegetation and zenith filter is active
            currentPatch => currentPatch%younger
+          end if     ! veg patches
         end do       ! Loop linked-list patches
      enddo           ! Loop Sites
 
