@@ -344,7 +344,7 @@ end subroutine create_cohort
 
   !-------------------------------------------------------------------------------------!
 
-  subroutine terminate_cohorts( currentSite, currentPatch, level , call_index, bc_in)
+  subroutine terminate_cohorts( currentSite, currentPatch, level , call_index, bc_in, out_call, struc_call)
     !
     ! !DESCRIPTION:
     ! terminates all cohorts when they get too small
@@ -358,6 +358,8 @@ end subroutine create_cohort
     integer             , intent(in)    :: level
     integer                             :: call_index
     type(bc_in_type), intent(in)        :: bc_in
+    integer, optional, intent(in)       :: out_call
+    integer, optional, intent(in)       :: struc_call
 
     ! Important point regarding termination levels.  Termination is typically
     ! called after fusion.  We do this so that we can re-capture the biomass that would
@@ -381,8 +383,15 @@ end subroutine create_cohort
     real(r8) :: struct_c  ! structural carbon [kg]
     integer :: terminate  ! do we terminate (itrue) or not (ifalse)
     integer :: istat      ! return status code
+    integer :: out_call_
     character(len=255) :: smsg
     !----------------------------------------------------------------------
+
+    if (present(out_call)) then 
+        out_call_=out_call
+    else
+        out_call_=700
+    endif
 
     currentCohort => currentPatch%shortest
     do while (associated(currentCohort))
@@ -403,6 +412,10 @@ end subroutine create_cohort
           if ( debug ) then
              write(fates_log(),*) 'terminating cohorts 0',currentCohort%n/currentPatch%area,currentCohort%dbh,currentCohort%pft,call_index
           endif
+          if(out_call_==1) then
+            write(fates_log(),*) 'terminated cohorts 0 at read restart ',level,call_index,struc_call,currentCohort%pft
+            call endrun(msg=errMsg(sourcefile, __LINE__))
+          endif
        endif
 
        ! The rest of these are only allowed if we are not dealing with a recruit (level 2)
@@ -416,6 +429,10 @@ end subroutine create_cohort
             if ( debug ) then
                write(fates_log(),*) 'terminating cohorts 1',currentCohort%n/currentPatch%area,currentCohort%dbh,currentCohort%pft,call_index
             endif
+            if(out_call_==1) then
+              write(fates_log(),*) 'terminated cohorts 1 at read restart ',currentCohort%n,currentCohort%dbh,level,call_index,struc_call,currentCohort%pft
+              call endrun(msg=errMsg(sourcefile, __LINE__))
+            endif
          endif
 
          ! Outside the maximum canopy layer
@@ -423,6 +440,10 @@ end subroutine create_cohort
            terminate = itrue
            if ( debug ) then
              write(fates_log(),*) 'terminating cohorts 2', currentCohort%canopy_layer,currentCohort%pft,call_index
+           endif
+           if(out_call_==1) then
+              write(fates_log(),*) 'terminated cohorts 2 at read restart ',level,call_index,struc_call,currentCohort%pft
+              call endrun(msg=errMsg(sourcefile, __LINE__))
            endif
          endif
 
@@ -434,6 +455,10 @@ end subroutine create_cohort
               write(fates_log(),*) 'terminating cohorts 3', &
                     sapw_c,leaf_c,fnrt_c,store_c,currentCohort%pft,call_index
             endif
+            if(out_call_==1) then
+              write(fates_log(),*) 'terminated cohorts 3 at read restart ',level,call_index,struc_call,currentCohort%pft
+              call endrun(msg=errMsg(sourcefile, __LINE__))
+            endif
          endif
 
          ! Total cohort biomass is negative
@@ -443,7 +468,10 @@ end subroutine create_cohort
                write(fates_log(),*) 'terminating cohorts 4', &
                     struct_c,sapw_c,leaf_c,fnrt_c,store_c,currentCohort%pft,call_index
             endif
-
+            if(out_call_==1) then
+              write(fates_log(),*) 'terminated cohorts 4 at read restart ',level,call_index,struc_call,currentCohort%pft
+              call endrun(msg=errMsg(sourcefile, __LINE__))
+            endif
         endif
       endif    !  if (.not.currentCohort%isnew .and. level == 2) then
 
@@ -691,7 +719,7 @@ end subroutine create_cohort
 
 
 
-  subroutine fuse_cohorts(currentSite, currentPatch, bc_in)
+  subroutine fuse_cohorts(currentSite, currentPatch, bc_in, out_call)
 
      !
      ! !DESCRIPTION:
@@ -710,6 +738,7 @@ end subroutine create_cohort
      type (ed_site_type), intent(inout)           :: currentSite
      type (fates_patch_type), intent(inout), pointer :: currentPatch
      type (bc_in_type), intent(in)                :: bc_in
+     integer, optional, intent(in)  :: out_call
      !
 
      ! !LOCAL VARIABLES:
@@ -746,6 +775,14 @@ end subroutine create_cohort
                                                  ! and gets its own flag
      integer  :: istat         ! return status code
      character(len=255) :: smsg
+
+     integer :: out_call_
+
+      if (present(out_call)) then 
+        out_call_=out_call
+      else
+        out_call_=700
+      endif
 
      !----------------------------------------------------------------------
 
@@ -828,7 +865,9 @@ end subroutine create_cohort
 
                                    fusion_took_place = 1
 
-                                   if ( fuse_debug .and. currentCohort%isnew ) then
+                                   if ( (fuse_debug .and. currentCohort%isnew) .or. out_call_ == 1 ) then
+                                      write(fates_log(),*)  'lat lon'
+                                      write(fates_log(),*)  currentSite%lat,currentSite%lon
                                       write(fates_log(),*) 'Fusing Two Cohorts'
                                       write(fates_log(),*) 'newn: ',newn
                                       write(fates_log(),*) 'Cohort I, Cohort II'

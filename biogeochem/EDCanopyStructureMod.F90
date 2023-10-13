@@ -87,7 +87,7 @@ module EDCanopyStructureMod
 contains
 
   ! ============================================================================
-  subroutine canopy_structure( currentSite , bc_in )
+  subroutine canopy_structure( currentSite , bc_in , call_index)
     !
     ! !DESCRIPTION:
     ! create cohort instance
@@ -134,6 +134,7 @@ contains
     ! !ARGUMENTS
     type(ed_site_type) , intent(inout), target   :: currentSite
     type(bc_in_type), intent(in)                 :: bc_in
+    integer, intent(in)                          :: call_index
 
     !
     ! !LOCAL VARIABLES:
@@ -200,7 +201,7 @@ contains
 
           ! Its possible that before we even enter this scheme
           ! some cohort numbers are very low.  Terminate them.
-          call terminate_cohorts(currentSite, currentPatch, 1, 12, bc_in)
+          call terminate_cohorts(currentSite, currentPatch, 1, 12, bc_in , out_call=call_index, struc_call=1)
 
           ! Calculate how many layers we have in this canopy
           ! This also checks the understory to see if its crown
@@ -213,12 +214,12 @@ contains
 
           ! After demotions, we may then again have cohorts that are very very
           ! very sparse, remove them
-          call terminate_cohorts(currentSite, currentPatch, 1,13,bc_in)
+          call terminate_cohorts(currentSite, currentPatch, 1,13,bc_in, out_call=call_index, struc_call=1)
 
-          call fuse_cohorts(currentSite, currentPatch, bc_in)
+          call fuse_cohorts(currentSite, currentPatch, bc_in, out_call = call_index )
 
           ! Remove cohorts for various other reasons
-          call terminate_cohorts(currentSite, currentPatch, 2,13,bc_in)
+          call terminate_cohorts(currentSite, currentPatch, 2,13,bc_in, out_call=call_index, struc_call=2)
 
 
           ! ---------------------------------------------------------------------------------------
@@ -237,12 +238,12 @@ contains
              end do
 
              ! Remove cohorts that are incredibly sparse
-             call terminate_cohorts(currentSite, currentPatch, 1,14,bc_in)
+             call terminate_cohorts(currentSite, currentPatch, 1,14,bc_in, out_call=call_index, struc_call=1)
 
-             call fuse_cohorts(currentSite, currentPatch, bc_in)
+             call fuse_cohorts(currentSite, currentPatch, bc_in, out_call = call_index)
 
              ! Remove cohorts for various other reasons
-             call terminate_cohorts(currentSite, currentPatch, 2,14,bc_in)
+             call terminate_cohorts(currentSite, currentPatch, 2,14,bc_in, out_call=call_index, struc_call=2)
 
           end if
 

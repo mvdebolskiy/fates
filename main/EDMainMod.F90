@@ -259,13 +259,13 @@ contains
           call sort_cohorts(currentPatch)
 
           ! kills cohorts that are too few
-          call terminate_cohorts(currentSite, currentPatch, 1, 10, bc_in  )
+          call terminate_cohorts(currentSite, currentPatch, 1, 10, bc_in , out_call=3, struc_call=1 )
 
           ! fuses similar cohorts
           call fuse_cohorts(currentSite,currentPatch, bc_in )
 
           ! kills cohorts for various other reasons
-          call terminate_cohorts(currentSite, currentPatch, 2, 10, bc_in )
+          call terminate_cohorts(currentSite, currentPatch, 2, 10, bc_in , out_call=3, struc_call=2 )
 
 
           currentPatch => currentPatch%younger
@@ -763,7 +763,7 @@ contains
   end subroutine ed_integrate_state_variables
 
   !-------------------------------------------------------------------------------!
-  subroutine ed_update_site( currentSite, bc_in, bc_out )
+  subroutine ed_update_site( currentSite, bc_in, bc_out , call_index )
     !
     ! !DESCRIPTION:
     ! Calls routines to consolidate the ED growth process.
@@ -779,6 +779,7 @@ contains
     type(ed_site_type) , intent(inout), target :: currentSite
     type(bc_in_type)   , intent(in)       :: bc_in
     type(bc_out_type)  , intent(inout)    :: bc_out
+    integer            , intent(in)       :: call_index
     !
     ! !LOCAL VARIABLES:
     type (fates_patch_type) , pointer :: currentPatch
@@ -790,7 +791,7 @@ contains
     call TotalBalanceCheck(currentSite,6)
 
     if(hlm_use_sp.eq.ifalse)then
-       call canopy_structure(currentSite, bc_in)
+       call canopy_structure(currentSite, bc_in, call_index )
     endif
 
     call TotalBalanceCheck(currentSite,final_check_id)
@@ -805,8 +806,8 @@ contains
 
         ! Is termination really needed here?
         ! Canopy_structure just called it several times! (rgk)
-        call terminate_cohorts(currentSite, currentPatch, 1, 11, bc_in)
-        call terminate_cohorts(currentSite, currentPatch, 2, 11, bc_in)
+        call terminate_cohorts(currentSite, currentPatch, 1, 11, bc_in, out_call=call_index, struc_call=1 )
+        call terminate_cohorts(currentSite, currentPatch, 2, 11, bc_in, out_call=call_index, struc_call=2 )
 
         ! This cohort count is used in the photosynthesis loop
         call count_cohorts(currentPatch)
