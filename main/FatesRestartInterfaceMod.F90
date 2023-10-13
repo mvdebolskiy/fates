@@ -2214,7 +2214,7 @@ contains
              ! found patch, increment
              patchespersite = patchespersite + 1
 
-             ccohort => cpatch%shortest
+             ccohort => cpatch%tallest
 
              ! new patch, reset num cohorts
              cohortsperpatch = 0
@@ -2353,7 +2353,7 @@ contains
 
                 io_idx_co = io_idx_co + 1
 
-                ccohort => ccohort%taller
+                ccohort => ccohort%shorter
 
              enddo ! ccohort do while
 
@@ -2911,7 +2911,7 @@ contains
      integer  :: i_scls           ! loop counter for size-clas
      integer  :: i_cacls          ! loop counter for cohort age class
      integer  :: i_cdam           ! loop counter for damage class
-     integer  :: icdj             ! loop counter for damage class
+     integer  :: icdj             ! loop conewpunter for damage class
      integer  :: icdi             ! loop counter for damage class 
 
      associate( rio_npatch_si         => this%rvars(ir_npatch_si)%int1d, &
@@ -3144,7 +3144,7 @@ contains
 
              patchespersite = patchespersite + 1
 
-             ccohort => cpatch%shortest
+             ccohort => cpatch%tallest
 
              ! new patch, reset num cohorts
              cohortsperpatch = 0
@@ -3275,7 +3275,7 @@ contains
 
                 io_idx_co = io_idx_co + 1
 
-                ccohort => ccohort%taller
+                ccohort => ccohort%shorter
 
              enddo ! current cohort do while
 
