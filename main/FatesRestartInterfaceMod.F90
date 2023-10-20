@@ -120,6 +120,7 @@ module FatesRestartInterfaceMod
   integer :: ir_coage_co
   integer :: ir_g_sb_laweight_co
   integer :: ir_height_co
+  integer :: ir_pheight_co
   integer :: ir_nplant_co
   integer :: ir_gpp_acc_co
   integer :: ir_npp_acc_co
@@ -139,6 +140,9 @@ module FatesRestartInterfaceMod
   integer :: ir_treelai_co
   integer :: ir_treesai_co
   integer :: ir_canopy_layer_tlai_pa
+  integer :: ir_nclp_pa
+  integer :: ir_zstar_pa
+  integer :: ir_ccount_pa
 
 
 
@@ -822,6 +826,9 @@ contains
     call this%set_restart_var(vname='fates_height', vtype=cohort_r8, &
          long_name='ed cohort - plant height', units='m', flushval = flushzero, &
          hlms='CLM:ALM', initialize=initialize_variables, ivar=ivar, index = ir_height_co )
+    call this%set_restart_var(vname='fates_pheight', vtype=cohort_r8, &
+         long_name='ed cohort - plant height', units='m', flushval = flushzero, &
+         hlms='CLM:ALM', initialize=initialize_variables, ivar=ivar, index = ir_pheight_co )
 
     call this%set_restart_var(vname='fates_nplant', vtype=cohort_r8, &
          long_name='ed cohort - number of plants in the cohort', &
@@ -1467,6 +1474,20 @@ contains
    call this%DefineRMeanRestartVar(vname='fates_tveg24patch',vtype=cohort_r8, &
         long_name='24-hour patch veg temp', &
         units='K', initialize=initialize_variables,ivar=ivar, index = ir_tveg24_pa)
+    call this%set_restart_var(vname='fates_nclp_pa', vtype=cohort_int, &
+             long_name='total number of canopy layers', &
+             units='-', flushval = flushzero, &
+             hlms='CLM:ALM', initialize=initialize_variables, ivar=ivar, index = ir_nclp_pa )
+
+    call this%set_restart_var(vname='fates_zstar_pa', vtype=cohort_r8, &
+             long_name='patch zstar', &
+             units='-', flushval = flushzero, &
+             hlms='CLM:ALM', initialize=initialize_variables, ivar=ivar, index = ir_zstar_pa )
+    call this%set_restart_var(vname='fates_ccount_pa', vtype=cohort_int, &
+             long_name='patch ccount', &
+             units='-', flushval = flushzero, &
+             hlms='CLM:ALM', initialize=initialize_variables, ivar=ivar, index = ir_ccount_pa )
+
 
    if ( regeneration_model == TRS_regeneration ) then
       
@@ -2004,6 +2025,7 @@ contains
            rio_coage_co                => this%rvars(ir_coage_co)%r81d, &
            rio_g_sb_laweight_co        => this%rvars(ir_g_sb_laweight_co)%r81d, &
            rio_height_co               => this%rvars(ir_height_co)%r81d, &
+           rio_pheight_co              => this%rvars(ir_pheight_co)%r81d, &
            rio_nplant_co               => this%rvars(ir_nplant_co)%r81d, &
            rio_gpp_acc_co              => this%rvars(ir_gpp_acc_co)%r81d, &
            rio_npp_acc_co              => this%rvars(ir_npp_acc_co)%r81d, &
@@ -2299,6 +2321,7 @@ contains
                 rio_dbh_co(io_idx_co)          = ccohort%dbh
                 rio_coage_co(io_idx_co)        = ccohort%coage
                 rio_height_co(io_idx_co)       = ccohort%height
+                rio_pheight_co(io_idx_co)      = ccohort%prev_height
                 rio_g_sb_laweight_co(io_idx_co)= ccohort%g_sb_laweight
                 rio_nplant_co(io_idx_co)       = ccohort%n
                 rio_gpp_acc_co(io_idx_co)      = ccohort%gpp_acc
@@ -2401,6 +2424,10 @@ contains
                 write(fates_log(),*) 'offsetNumCohorts III ' &
                       ,io_idx_co,cohortsperpatch
              endif
+
+             this%rvars(ir_nclp_pa)%int1d(io_idx_co_1st) = cpatch%ncl_p
+             this%rvars(ir_zstar_pa)%r81d(io_idx_co_1st) = cpatch%zstar
+             this%rvars(ir_ccount_pa)%int1d(io_idx_co_1st) = cpatch%countcohorts
 
 
              if(hlm_use_sp.eq.ifalse)then
@@ -2846,6 +2873,7 @@ contains
      use EDTypesMod, only : numWaterMem
      use EDTypesMod, only : num_vegtemp_mem
      use FatesSizeAgeTypeIndicesMod, only : get_age_class_index
+    use FatesSizeAgeTypeIndicesMod, only : sizetype_class_index
      
      ! !ARGUMENTS:
      class(fates_restart_interface_type) , intent(inout) :: this
@@ -2942,6 +2970,7 @@ contains
           rio_coage_co                => this%rvars(ir_coage_co)%r81d, &
           rio_g_sb_laweight_co        => this%rvars(ir_g_sb_laweight_co)%r81d, &
           rio_height_co               => this%rvars(ir_height_co)%r81d, &
+          rio_pheight_co              => this%rvars(ir_pheight_co)%r81d, &
           rio_nplant_co               => this%rvars(ir_nplant_co)%r81d, &
           rio_gpp_acc_co              => this%rvars(ir_gpp_acc_co)%r81d, &
           rio_npp_acc_co              => this%rvars(ir_npp_acc_co)%r81d, &
@@ -3211,6 +3240,7 @@ contains
                 ccohort%coage        = rio_coage_co(io_idx_co)
                 ccohort%g_sb_laweight= rio_g_sb_laweight_co(io_idx_co)
                 ccohort%height       = rio_height_co(io_idx_co)
+                ccohort%prev_height  = rio_pheight_co(io_idx_co)
                 ccohort%n            = rio_nplant_co(io_idx_co)
                 ccohort%gpp_acc      = rio_gpp_acc_co(io_idx_co)
                 ccohort%npp_acc      = rio_npp_acc_co(io_idx_co)
@@ -3272,7 +3302,13 @@ contains
                     ccohort%treelai = this%rvars(ir_treelai_co)%r81d(io_idx_co)
                     ccohort%treesai = this%rvars(ir_treesai_co)%r81d(io_idx_co)
                 end if
-
+                call sizetype_class_index(ccohort%dbh,ccohort%pft, &
+                     ccohort%size_class,ccohort%size_by_pft_class)
+                if (.not. (ccohort%size_class == ccohort%size_class_lasttimestep)) then
+                  write(fates_log(),*)'calculated size_class and size_class_lasttimestep do not match on restart'
+                  write(fates_log(),*)ccohort%size_class, ccohort%size_class_lasttimestep
+                  call endrun(msg=errMsg(sourcefile, __LINE__))
+                endif
                 io_idx_co = io_idx_co + 1
 
                 ccohort => ccohort%shorter
@@ -3300,6 +3336,10 @@ contains
              ! Set zenith angle info
              cpatch%solar_zenith_flag  = ( rio_solar_zenith_flag_pa(io_idx_co_1st) .eq. itrue )
              cpatch%solar_zenith_angle = rio_solar_zenith_angle_pa(io_idx_co_1st)
+
+             cpatch%ncl_p = this%rvars(ir_nclp_pa)%int1d(io_idx_co_1st)
+             cpatch%zstar = this%rvars(ir_zstar_pa)%r81d(io_idx_co_1st)
+             cpatch%countcohorts = this%rvars(ir_ccount_pa)%int1d(io_idx_co_1st)
 
 
              call this%GetRMeanRestartVar(cpatch%tveg24, ir_tveg24_pa, io_idx_co_1st)

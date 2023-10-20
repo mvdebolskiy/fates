@@ -267,6 +267,8 @@ contains
           ! kills cohorts for various other reasons
           call terminate_cohorts(currentSite, currentPatch, 2, 10, bc_in , out_call=3, struc_call=2 )
 
+          call sort_cohorts(currentPatch)
+
 
           currentPatch => currentPatch%younger
        enddo
@@ -783,6 +785,7 @@ contains
     !
     ! !LOCAL VARIABLES:
     type (fates_patch_type) , pointer :: currentPatch
+    type (fates_cohort_type), pointer :: currentCohort
     !-----------------------------------------------------------------------
     if(hlm_use_sp.eq.ifalse)then
       call canopy_spread(currentSite)
@@ -815,6 +818,12 @@ contains
         ! Update the total area of by patch age class array 
         currentSite%area_by_age(currentPatch%age_class) = &
              currentSite%area_by_age(currentPatch%age_class) + currentPatch%area
+        currentCohort => currentPatch%tallest
+          do while(associated(currentCohort))
+            currentCohort%prev_height = currentCohort%height
+            currentCohort => currentCohort%shorter
+          end do
+
         
         currentPatch => currentPatch%younger
 

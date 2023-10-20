@@ -154,6 +154,8 @@ contains
     ! within tolerance of canopy area, there is something wrong
 
     integer, parameter  :: max_patch_iterations = 10
+    integer  :: zst 
+    integer  :: nclp
 
 
     !----------------------------------------------------------------------
@@ -206,10 +208,20 @@ contains
           ! Calculate how many layers we have in this canopy
           ! This also checks the understory to see if its crown
           ! area is large enough to warrant a temporary sub-understory layer
-          z = NumPotentialCanopyLayers(currentPatch,currentSite%spread,include_substory=.false.)
+          z = NumPotentialCanopyLayers(currentPatch,currentSite%spread, out_call=call_index, include_substory=.false.,call_index=1)
 
           do i_lyr = 1,z ! Loop around the currently occupied canopy layers.
-             call DemoteFromLayer(currentSite, currentPatch, i_lyr, bc_in)
+             call DemoteFromLayer(currentSite, currentPatch, i_lyr, bc_in, out_call=call_index)
+            if (call_index == 1) then
+              currentCohort => currentPatch%tallest
+              do while (associated(currentCohort))
+                if (currentSite%demotion_rate(currentCohort%size_class) > 0 ) then
+                  write(fates_log(),*) 'layers demoted on restart'
+                  write(fates_log(),*),patch_area_counter, z, currentSite%demotion_rate(currentCohort%size_class)
+                endif
+                currentCohort => currentCohort%shorter
+              end do
+            endif
           end do
 
           ! After demotions, we may then again have cohorts that are very very
@@ -228,13 +240,23 @@ contains
           ! ---------------------------------------------------------------------------------------
 
           ! Re-calculate Number of layers without the false substory
-          z = NumPotentialCanopyLayers(currentPatch,currentSite%spread,include_substory=.false.)
+          z = NumPotentialCanopyLayers(currentPatch,currentSite%spread, out_call=call_index ,include_substory=.false.,call_index=2)
 
           ! We only promote if we have at least two layers
           if (z>1) then
 
              do i_lyr=1,z-1
-                call PromoteIntoLayer(currentSite, currentPatch, i_lyr)
+                call PromoteIntoLayer(currentSite, currentPatch, i_lyr, out_call=call_index)
+              if (call_index == 1) then
+                currentCohort => currentPatch%tallest
+                do while (associated(currentCohort))
+                  if (currentSite%promotion_rate(currentCohort%size_class) > 0 ) then
+                    write(fates_log(),*) 'layers promoted on restart'
+                    write(fates_log(),*)patch_area_counter, z, currentSite%promotion_rate(currentCohort%size_class)
+                  endif
+                  currentCohort => currentCohort%shorter
+                end do
+              endif
              end do
 
              ! Remove cohorts that are incredibly sparse
@@ -253,7 +275,7 @@ contains
           ! that cohort fusion has nudged the areas a little bit.
           ! ---------------------------------------------------------------------------------------
 
-          z = NumPotentialCanopyLayers(currentPatch,currentSite%spread,include_substory=.false.)
+          z = NumPotentialCanopyLayers(currentPatch,currentSite%spread, out_call=call_index,include_substory=.false.,call_index=3)
           area_not_balanced = .false.
           do i_lyr = 1,z
              call CanopyLayerArea(currentPatch,currentSite%spread,i_lyr,arealayer(i_lyr))
@@ -302,7 +324,14 @@ contains
 
 
        ! Set current canopy layer occupancy indicator.
-       currentPatch%NCL_p = min(nclmax,z)
+       nclp=min(nclmax,z)
+
+       if ( (.not. currentPatch%ncl_p == nclp) .and. call_index == 1 ) then
+          write(fates_log(),*) ' Stored nclp is not equal calculated one'
+          write(fates_log(),*) 'nclp ', currentPatch%ncl_p, nclp
+
+       !call endrun(msg=errMsg(sourcefile, __LINE__))
+       endif
 
        ! -------------------------------------------------------------------------------------------
        ! if we are using "strict PPA", then calculate a z_star value as
@@ -336,7 +365,7 @@ contains
   ! ==============================================================================================
 
 
-  subroutine DemoteFromLayer(currentSite,currentPatch,i_lyr,bc_in)
+  subroutine DemoteFromLayer(currentSite,currentPatch,i_lyr,bc_in, out_call)
 
     use EDParamsMod, only : ED_val_comp_excln
 
@@ -345,6 +374,7 @@ contains
     type(fates_patch_type), intent(inout) :: currentPatch
     integer, intent(in)                :: i_lyr   ! Current canopy layer of interest
     type(bc_in_type), intent(in)       :: bc_in
+    integer, intent(in)                :: out_call
 
     ! !LOCAL VARIABLES:
     type(fates_cohort_type), pointer :: currentCohort
@@ -368,14 +398,21 @@ contains
     ! this tallies their excluded area
     real(r8) :: arealayer              ! the area of the current canopy layer
     logical  :: tied_size_with_neighbors
+    logical  :: demoted = .false.
     real(r8) :: total_crownarea_of_tied_cohorts
+    character(len=511) :: erromsg
 
     ! First, determine how much total canopy area we have in this layer
     call CanopyLayerArea(currentPatch,currentSite%spread,i_lyr,arealayer)
 
     demote_area = arealayer - currentPatch%area
 
+
     if ( demote_area > area_target_precision ) then
+
+      if (out_call == 1) then
+         write(fates_log(),*),'demote_area= ',demote_area
+      endif
 
        ! Is this layer currently over-occupied?
        ! In that case, we need to work out which cohorts to demote.
@@ -395,7 +432,7 @@ contains
                 call endrun(msg=errMsg(sourcefile, __LINE__))
              end if
           end if
-
+          demoted = .false.
           if( currentCohort%canopy_layer == i_lyr)then
 
              if (ED_val_comp_excln .ge. 0.0_r8 ) then
@@ -528,7 +565,7 @@ contains
                 if(currentCohort%canopy_layer  ==  i_lyr) then
                    currentCohort%excl_weight = currentCohort%c_area * currentCohort%excl_weight * scale_factor
 
-                   if(debug) then
+                   if(debug .or. out_call == 1) then
                       if((currentCohort%excl_weight > (currentCohort%c_area+area_target_precision)) .or. &
                            (currentCohort%excl_weight < 0._r8)  ) then
                          write(fates_log(),*) 'exclusion area too big (1)'
@@ -623,7 +660,6 @@ contains
 
 
        ! Weights have been calculated. Now move them to the lower layer
-
        currentCohort => currentPatch%tallest
        do while (associated(currentCohort))
 
@@ -637,13 +673,13 @@ contains
              fnrt_c          = currentCohort%prt%GetState(fnrt_organ,carbon12_element)
              sapw_c          = currentCohort%prt%GetState(sapw_organ,carbon12_element)
              struct_c        = currentCohort%prt%GetState(struct_organ,carbon12_element)
-
+             demoted = .false.
              if ( (cc_loss-currentCohort%c_area) > -nearzero .and. &
                   (cc_loss-currentCohort%c_area) < area_target_precision ) then
 
                 ! If the whole cohort is being demoted, just change its
                 ! layer index
-
+                demoted = .true.
                 currentCohort%canopy_layer = i_lyr+1
 
                 ! keep track of number and biomass of demoted cohort
@@ -654,7 +690,7 @@ contains
 
              elseif( (cc_loss < currentCohort%c_area) .and. &
                   (cc_loss > area_target_precision) ) then
-
+                demoted=.true.
                 ! If only part of the cohort is demoted
                 ! then it must be split (little more complicated)
 
@@ -785,7 +821,7 @@ contains
 
   ! ==============================================================================================
 
-  subroutine PromoteIntoLayer(currentSite,currentPatch,i_lyr)
+  subroutine PromoteIntoLayer(currentSite,currentPatch,i_lyr, out_call)
 
     ! -------------------------------------------------------------------------------------------
     ! Check whether the intended 'full' layers are actually filling all the space.
@@ -800,6 +836,7 @@ contains
     type(ed_site_type), intent(inout), target  :: currentSite
     type(fates_patch_type), intent(inout), target :: currentPatch
     integer, intent(in)                        :: i_lyr   ! Current canopy layer of interest
+    integer, intent(in)                        :: out_call
 
     ! !LOCAL VARIABLES:
     type(fates_cohort_type), pointer :: currentCohort
@@ -838,6 +875,10 @@ contains
     if( promote_area > area_target_precision ) then
 
        if(arealayer_below <= promote_area ) then
+
+          if (out_call == 1) then
+            write(fates_log(),*),'promote_area= ',promote_area
+          endif
 
           ! ---------------------------------------------------------------------------
           ! Promote all cohorts from layer below if that whole layer has area smaller
@@ -2208,7 +2249,7 @@ contains
   
   ! ===============================================================================================
 
-  function NumPotentialCanopyLayers(currentPatch,site_spread,include_substory) result(z)
+  function NumPotentialCanopyLayers(currentPatch,site_spread,include_substory, out_call, call_index) result(z)
 
     ! --------------------------------------------------------------------------------------------
     ! Calculate the number of canopy layers in this patch.
@@ -2222,6 +2263,8 @@ contains
     type(fates_patch_type),target   :: currentPatch
     real(r8),intent(in)          :: site_spread
     logical                      :: include_substory
+    integer,optional,intent(in)  :: out_call
+    integer,optional,intent(in)  :: call_index
 
     type(fates_cohort_type),pointer :: currentCohort
 
@@ -2235,6 +2278,18 @@ contains
        z = max(z,currentCohort%canopy_layer)
        currentCohort => currentCohort%shorter
     enddo
+    if (out_call == 1 .and. z > currentPatch%ncl_p ) then
+      write(fates_log(),*) 'deb: ',z,currentPatch%ncl_p,currentPatch%countcohorts,nclmax, call_index
+    endif
+    currentCohort => currentPatch%tallest
+    do while (associated(currentCohort))
+      if (out_call == 1 .and. z > currentPatch%ncl_p ) then
+          write(fates_log(),*) 'iter: ', z, currentCohort%canopy_layer, currentCohort%n, currentCohort%height
+      end if
+      currentCohort => currentCohort%shorter
+    end do
+
+
 
     if(include_substory)then
        arealayer = 0.0
