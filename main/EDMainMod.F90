@@ -947,7 +947,7 @@ contains
     ! !ARGUMENTS:
     type(ed_site_type) , intent(inout) :: currentSite
     integer            , intent(in)    :: call_index
-    logical,optional   , intent(in)    :: is_restarting ! is the model going through its restart init procedure?
+    logical,optional   , intent(in)    :: is_restarting_arg
     
     !
     ! !LOCAL VARIABLES:
@@ -968,7 +968,7 @@ contains
     real(r8) :: store_m         ! "" storage
     real(r8) :: struct_m        ! "" structure
     real(r8) :: repro_m         ! "" reproduction
-    logical  :: l_is_restarting   ! local version of the optional argument
+    logical  :: is_restarting   ! is the model going through its restart init procedure?
     integer  :: el              ! loop counter for element types
 
     ! nb. There is no time associated with these variables
@@ -983,9 +983,11 @@ contains
     logical, parameter :: print_cohorts = .true.   ! Set to true if you want
                                                     ! to print cohort data
                                                     ! upon fail (lots of text)
-    l_is_restarting = .false.
-    if(present(is_restarting))then
-       l_is_restarting = is_restarting
+
+    if(present(is_restarting_arg))then
+       is_restarting = is_restarting_arg
+    else
+       is_restarting = .false.
     end if
     
     !-----------------------------------------------------------------------
