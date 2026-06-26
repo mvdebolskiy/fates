@@ -29,7 +29,7 @@ module EDBtranMod
   private
 
 
-  logical, parameter :: debug = .false.
+  logical, parameter :: debug = .true.
   
   public :: btran_ed
   public :: get_active_suction_layers
@@ -89,6 +89,7 @@ contains
   subroutine btran_ed( nsites, sites, bc_in, bc_out)
 
     use FatesPlantHydraulicsMod, only : BTranForHLMDiagnosticsFromCohortHydr
+    use FatesConstantsMod,       only : rsnbl_math_prec
 
 
     ! ---------------------------------------------------------------------------------
@@ -117,10 +118,11 @@ contains
     integer  :: j                 ! soil layer
     integer  :: ifp               ! patch vector index for the site
     integer  :: ft                ! plant functional type index
+    real(r8)  :: num_valid_pfts   ! number of pfts that should transpire
     real(r8) :: smp_node          ! matrix potential
     real(r8) :: rresis            ! suction limitation to transpiration independent
     ! of root density
-    real(r8) :: pftgs(maxpft)     ! pft weighted stomatal conductance m/s
+    real(r8) :: pftgs(numpft)     ! pft weighted stomatal conductance m/s
     real(r8) :: temprootr
     real(r8) :: sum_pftgs         ! sum of weighted conductances (for normalization)
     real(r8), allocatable :: root_resis(:,:)  ! Root resistance in each pft x layer
@@ -130,13 +132,13 @@ contains
          smpsc     => EDPftvarcon_inst%smpsc          , &  ! INTERF-TODO: THESE SHOULD BE FATES PARAMETERS
          smpso     => EDPftvarcon_inst%smpso            &  ! INTERF-TODO: THESE SHOULD BE FATES PARAMETERS
          )
-
+    allocate(root_resis(numpft,bc_in(s)%nlevsoil))
     do s = 1,nsites
 
-       allocate(root_resis(numpft,bc_in(s)%nlevsoil))
+
 
        bc_out(s)%rootr_pasl(:,:) = 0._r8
-
+       root_resis(1:numpft,1:bc_in(s)%nlevsoil) = 0.0_r8
        cpatch => sites(s)%oldest_patch
        do while (associated(cpatch))
 
@@ -179,7 +181,7 @@ contains
 
                 ! Normalize root resistances to get layer contribution to ET
                 do j = 1,bc_in(s)%nlevsoil  
-                   if (cpatch%btran_ft(ft)  >  nearzero) then
+                   if (cpatch%btran_ft(ft)  >  rsnbl_math_prec) then
                       root_resis(ft,j) = root_resis(ft,j)/cpatch%btran_ft(ft)
                    else
                       root_resis(ft,j) = 0._r8
@@ -192,31 +194,33 @@ contains
              ! The cohort's conductance g_sb_laweighted, contains a weighting factor
              ! based on the cohort's leaf area. units: [m/s] * [m2]
 
-             pftgs(1:maxpft) = 0._r8
-             ccohort => cpatch%tallest
-             do while(associated(ccohort))
-                pftgs(ccohort%pft) = pftgs(ccohort%pft) + ccohort%g_sb_laweight
-                ccohort => ccohort%shorter
-             enddo
-
+             pftgs(1:numpft) = 0._r8
+             if (cpatch%num_cohorts > 0) then
+                ccohort => cpatch%tallest
+                do while(associated(ccohort))
+                    pftgs(ccohort%pft) = pftgs(ccohort%pft) + ccohort%g_sb_laweight
+                    ccohort => ccohort%shorter
+                enddo
+             endif
              ! Process the boundary output, this is necessary for calculating the soil-moisture
              ! sink term across the different layers in driver/host.  Photosynthesis will
              ! pass the host a total transpiration for the patch.  This needs rootr to be
              ! distributed over the soil layers.
              sum_pftgs = sum(pftgs(1:numpft))
-
+             num_valid_pfts = 0._r8
+             do ft = 1,numpft
+                if (pftgs(ft)>0._r8) then
+                  num_valid_pfts = num_valid_pfts +1._r8
+                end if
+             end do
              do j = 1, bc_in(s)%nlevsoil
                 bc_out(s)%rootr_pasl(ifp,j) = 0._r8
-                do ft = 1,numpft
-                   if( sum_pftgs > 0._r8)then !prevent problem with the first timestep - might fail
-                      !bit-retart test as a result? FIX(RF,032414)  
-                      bc_out(s)%rootr_pasl(ifp,j) = bc_out(s)%rootr_pasl(ifp,j) + &
-                           root_resis(ft,j) * pftgs(ft)/sum_pftgs
-                   else
-                      bc_out(s)%rootr_pasl(ifp,j) = bc_out(s)%rootr_pasl(ifp,j) + &
-                           root_resis(ft,j) * 1._r8/real(numpft,r8)
-                   end if
-                enddo
+                if( maxval(pftgs(1:numpft)) > rsnbl_math_prec)then !prevent problem with the first timestep - might fail
+                   do ft = 1,numpft
+                         !bit-retart test as a result? FIX(RF,032414)  
+                         bc_out(s)%rootr_pasl(ifp,j) = bc_out(s)%rootr_pasl(ifp,j) + (root_resis(ft,j) * (pftgs(ft)/sum_pftgs))
+                   enddo
+                endif
              enddo
 
              ! Calculate the BTRAN that is passed back to the HLM
@@ -226,35 +230,44 @@ contains
              if(hlm_use_planthydro.eq.ifalse) then
                 !weight patch level output BTRAN for the
                 bc_out(s)%btran_pa(ifp) = 0.0_r8
-                do ft = 1,numpft
-                   if( sum_pftgs > 0._r8)then !prevent problem with the first timestep - might fail
+                if( maxval(pftgs(1:numpft)) > rsnbl_math_prec)then !prevent problem with the first timestep - might fail
+                   do ft = 1,numpft
                       !bit-retart test as a result? FIX(RF,032414)   
-                      bc_out(s)%btran_pa(ifp)   = bc_out(s)%btran_pa(ifp) + cpatch%btran_ft(ft)  * pftgs(ft)/sum_pftgs
-                   else
-                      bc_out(s)%btran_pa(ifp)   = bc_out(s)%btran_pa(ifp) + cpatch%btran_ft(ft) * 1./numpft
-                   end if
-                enddo
+                      bc_out(s)%btran_pa(ifp)   = bc_out(s)%btran_pa(ifp) + (cpatch%btran_ft(ft)  * (pftgs(ft)/sum_pftgs))
+                   enddo
+                end if
              end if
 
              temprootr = sum(bc_out(s)%rootr_pasl(ifp,1:bc_in(s)%nlevsoil))
 
-             if(abs(1.0_r8-temprootr) > 1.0e-10_r8 .and. temprootr > 1.0e-10_r8)then
+             if(abs(1.0_r8-temprootr) > rsnbl_math_prec .and. temprootr > rsnbl_math_prec)then
 
-                if(debug) write(fates_log(),*) 'error with rootr in canopy fluxes',temprootr,sum_pftgs
-                
+                if(debug) write(fates_log(),*) 'error with rootr in canopy fluxes',temprootr,sum_pftgs,num_valid_pfts
+                do ft=1,numpft
+                  if (debug) write(fates_log(),*)'sum root_res for pft:',ft,sum(root_resis(ft,1:bc_in(s)%nlevsoil)),pftgs(ft)
+                enddo
                 do j = 1,bc_in(s)%nlevsoil
                    bc_out(s)%rootr_pasl(ifp,j) = bc_out(s)%rootr_pasl(ifp,j)/temprootr
                 enddo
-                
-             end if
+            !  do j = 1, bc_in(s)%nlevsoil
+            !     bc_out(s)%rootr_pasl(ifp,j) = 0._r8
+            !     if( maxval(pftgs(1:numpft)) > rsnbl_math_prec)then !prevent problem with the first timestep - might fail
+            !        do ft = 1,numpft
+            !              !bit-retart test as a result? FIX(RF,032414)  
+            !              bc_out(s)%rootr_pasl(ifp,j) = bc_out(s)%rootr_pasl(ifp,j) + &
+            !                  root_resis(ft,j) * pftgs(ft)/sum_pftgs
+            !        enddo
+            !     endif
+            !  enddo
+             end if 
           endif if_bare
           cpatch => cpatch%younger
        end do
 
-       deallocate(root_resis)
+
 
     end do
-
+    deallocate(root_resis)
     if(hlm_use_planthydro.eq.itrue) then
        call BTranForHLMDiagnosticsFromCohortHydr(nsites,sites,bc_out)
     end if

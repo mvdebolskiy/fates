@@ -1257,6 +1257,7 @@ module FatesPatchMod
       write(fates_log(),*) ' (omitting arrays)                      '
       write(fates_log(),*) '----------------------------------------'
       write(fates_log(),*) 'pa%patchno            = ',this%patchno
+      write(fates_log(),*) 'pa%nocomp            = ',this%nocomp_pft_label
       write(fates_log(),*) 'pa%age                = ',this%age
       write(fates_log(),*) 'pa%age_class          = ',this%age_class
       write(fates_log(),*) 'pa%area               = ',this%area
