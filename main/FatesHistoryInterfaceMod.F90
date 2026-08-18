@@ -673,6 +673,8 @@ module FatesHistoryInterfaceMod
   integer :: ih_seeds_in_local_si_pft     ! carbon only
   integer :: ih_ungerm_seed_bank_si_pft   ! carbon only
   integer :: ih_seedling_pool_si_pft      ! carbon only
+  integer :: ih_lai_si_pft
+  integer :: ih_treelai_si_pft
 
   ! Non-per-ageclass equivalents of per-ageclass variables
   integer :: ih_canopy_fracarea_si
@@ -3375,6 +3377,8 @@ contains
              hio_seedling_pool_si_pft             => this%hvars(ih_seedling_pool_si_pft)%r82d, &
              hio_seeds_in_si_pft                  => this%hvars(ih_seeds_in_si_pft)%r82d, &
              hio_seeds_in_local_si_pft            => this%hvars(ih_seeds_in_local_si_pft)%r82d, &
+             hio_lai_si_pft                       => this%hvars(ih_lai_si_pft)%r82d, &
+             hio_treelai_si_pft                   => this%hvars(ih_treelai_si_pft)%r82d, &
              hio_disturbance_rate_si_lulu         => this%hvars(ih_disturbance_rate_si_lulu)%r82d, &
              hio_cstarvmortality_continuous_carbonflux_si_pft  => this%hvars(ih_cstarvmortality_continuous_carbonflux_si_pft)%r82d, &
              hio_transition_matrix_si_lulu      => this%hvars(ih_transition_matrix_si_lulu)%r82d, &
@@ -3594,6 +3598,12 @@ contains
                          ! Update PFT partitioned biomass components
                          hio_leafbiomass_si_pft(io_si,ft) = hio_leafbiomass_si_pft(io_si,ft) + &
                               (ccohort%n * AREA_INV) * leaf_m
+
+                         hio_lai_si_pft(io_si,ft) = hio_lai_si_pft(io_si,ft) + &
+                              (ccohort%n * AREA_INV) * leaf_m *g_per_kg * prt_params%slatop(ft) ! n/m2 * kg/n g/kg m2/g = 1/m2 m2
+
+                         hio_treelai_si_pft(io_si,ft) = hio_treelai_si_pft(io_si,ft) + &
+                            ccohort%treelai*ccohort%c_area  * AREA_INV 
 
                          hio_storebiomass_si_pft(io_si,ft) = hio_storebiomass_si_pft(io_si,ft) + &
                               (ccohort%n * AREA_INV) * store_m
@@ -7506,6 +7516,19 @@ contains
                use_default=trim(drop_in_sp), avgflag='A', vtype=site_pft_r8, hlms='CLM:ALM', &
                upfreq=group_dyna_complx, ivar=ivar, initialize=initialize_variables,                 &
                index=ih_mortality_si_pft)
+
+           call this%set_history_var(vname='FATES_LAI_PF', units='m2 m-2',          &
+               long='total PFT-level leaf area index from leafbiomass',    &
+               use_default=trim(drop_in_sp), avgflag='A', vtype=site_pft_r8, hlms='CLM:ALM', &
+               upfreq=group_dyna_complx, ivar=ivar, initialize=initialize_variables,                 &
+               index=ih_lai_si_pft)
+
+           call this%set_history_var(vname='FATES_TREELAI_PF', units='m2 m-2',          &
+               long='total PFT-level leaf area index from treelai',    &
+               use_default='inactive', avgflag='A', vtype=site_pft_r8, hlms='CLM:ALM', &
+               upfreq=group_dyna_complx, ivar=ivar, initialize=initialize_variables,                 &
+               index=ih_treelai_si_pft)
+
 
           !MLO - Drought-deciduous phenology variables are now defined for each PFT.
           call this%set_history_var(vname='FATES_DROUGHT_STATUS_PF',                     &
