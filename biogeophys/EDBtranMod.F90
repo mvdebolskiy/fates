@@ -29,7 +29,7 @@ module EDBtranMod
   private
 
 
-  logical, parameter :: debug = .true.
+  logical, parameter :: debug = .false.
   
   public :: btran_ed
   public :: get_active_suction_layers
@@ -153,32 +153,8 @@ contains
              ! PFT-averaged point level root fraction for extraction purposese.
              ! The cohort's conductance g_sb_laweighted, contains a weighting factor
              ! based on the cohort's leaf area. units: [m/s] * [m2]
-             pfts_present(1:numpft) = 0._r8
-             pftgs(1:numpft)=0._r8
-             sum_pftgs = 0._r8
-             num_present_pfts = 0._r8
-             ccohort => cpatch%tallest
-             do while (associated(ccohort))
-                if (ccohort%g_sb_laweight > 0._r8) then
-                   sum_pftgs = sum_pftgs + ccohort%g_sb_laweight
-                   pftgs(ccohort%pft) = pftgs(ccohort%pft) + ccohort%g_sb_laweight
-                endif
-                pfts_present(ccohort%pft) = 1._r8
-                ccohort => ccohort%shorter
-             end do
+ 
 
-             num_present_pfts = sum(pfts_present(1:numpft))
-
-             if (num_present_pfts <= 0._r8) then
-                call endrun(msg='ERROR: no pfts in a patch ' // errMsg(__FILE__, __LINE__))
-             endif
-
-             ! this is a bit arbitrary threshold but with tiny weight it does not matter which pft has lower resistance.
-             if (any(pftgs(1:numpft) > rsnbl_math_prec)) then  
-                pftgs(1:numpft)=pftgs(1:numpft)/sum_pftgs
-             else
-                pftgs(1:numpft)=pfts_present(1:numpft)/num_present_pfts
-             endif
 
              do ft = 1,numpft
 
@@ -221,7 +197,35 @@ contains
                 end do
 
              end do !PFT
+             pfts_present(1:numpft) = 0._r8
+             pftgs(1:numpft)=0._r8
+             sum_pftgs = 0._r8
+             num_present_pfts = 0._r8
+             ccohort => cpatch%tallest
+             do while (associated(ccohort))
+                if (cpatch%btran_ft(ccohort%pft)  >  nearzero) then
+                   if (ccohort%g_sb_laweight > 0._r8) then
+                      sum_pftgs = sum_pftgs + ccohort%g_sb_laweight
+                      pftgs(ccohort%pft) = pftgs(ccohort%pft) + ccohort%g_sb_laweight
+                   endif
+                   pfts_present(ccohort%pft) = 1._r8
+                endif
+                ccohort => ccohort%shorter
+             end do
 
+             num_present_pfts = sum(pfts_present(1:numpft))
+
+
+            if (num_present_pfts > 0._r8) then
+             ! this is a bit arbitrary threshold but with tiny weight it does not matter which pft has lower resistance.
+               if (any(pftgs(1:numpft) > rsnbl_math_prec)) then  
+                   pftgs(1:numpft)=pftgs(1:numpft)/sum_pftgs
+               else
+                   pftgs(1:numpft)=pfts_present(1:numpft)/num_present_pfts
+               endif
+            else 
+               pftgs(1:numpft)=0._r8
+            endif
              ! Process the boundary output, this is necessary for calculating the soil-moisture
              ! sink term across the different layers in driver/host.  Photosynthesis will
              ! pass the host a total transpiration for the patch.  This needs rootr to be
@@ -246,8 +250,7 @@ contains
              if(abs(1.0_r8-temprootr) > rsnbl_math_prec .and. temprootr > rsnbl_math_prec)then
                 ! weights and resistances above produced too small numbers and made math to not add up
                 ! reweight everything so the sum 
-                if(debug) write(fates_log(),*) 'error with rootr in canopy fluxes',temprootr,sum_pftgs
-                
+                if(debug) write(fates_log(),*) 'error with rootr in canopy fluxes',temprootr,sum_pftgs,num_present_pfts
                 do j = 1,bc_in(s)%nlevsoil
                    bc_out(s)%rootr_pasl(ifp,j) = bc_out(s)%rootr_pasl(ifp,j)/temprootr
                 enddo
