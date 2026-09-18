@@ -87,6 +87,7 @@ Module EDCohortDynamicsMod
   use FatesConstantsMod,      only : i_term_mort_type_cstarv
   use FatesConstantsMod,      only : i_term_mort_type_canlev
   use FatesConstantsMod,      only : i_term_mort_type_numdens
+  use FatesConstantsMod,      only : i_term_mort_type_badpatch
 
   use shr_infnan_mod,         only : nan => shr_infnan_nan, assignment(=)  
   use shr_log_mod,            only : errMsg => shr_log_errMsg
@@ -411,6 +412,12 @@ contains
          endif
       endif
 
+      ! termination due to tiny patch not beeing able to fuse
+      if (level == 4) then
+        terminate = itrue
+        termination_type = i_term_mort_type_badpatch
+        write(fates_log(),*) 'MVD: pft in patch... terminated: ',currentCohort%pft,currentPatch%nocomp_pft_label
+      endif
       if (terminate == itrue) then
          call terminate_cohort(currentSite, currentPatch, currentCohort, bc_in, termination_type)
          deallocate(currentCohort, stat=istat, errmsg=smsg)

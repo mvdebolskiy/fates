@@ -131,7 +131,7 @@ module EDMainMod
   private :: TotalBalanceCheck
   private :: bypass_dynamics
 
-  logical :: debug  = .false.
+  logical :: debug  = .true.
 
   integer, parameter :: final_check_id = -1
 
@@ -211,7 +211,6 @@ contains
       end if ! SP phenology
     end if
 
-
     if (hlm_use_ed_st3.eq.ifalse.and.hlm_use_sp.eq.ifalse) then   ! Bypass if ST3
        
        ! Check that the site doesn't consist solely of a single bareground patch.
@@ -223,14 +222,14 @@ contains
        if (currentSite%youngest_patch%nocomp_pft_label .ne. nocomp_bareground)then
           call DailyFireModel(currentSite, bc_in)
        end if
-
+       !call TotalBalanceCheck(currentSite, 10)
        ! Calculate disturbance and mortality based on previous timestep vegetation.
        ! disturbance_rates calls logging mortality and other mortalities, Yi Xu
        call disturbance_rates(currentSite, bc_in)
-
+       !call TotalBalanceCheck(currentSite, 11)
        ! Integrate state variables from annual rates to daily timestep
        call ed_integrate_state_variables(currentSite, bc_in, bc_out )
-
+       !call TotalBalanceCheck(currentSite, 12)
        ! at this point in the call sequence, if flag to transition_landuse_from_off_to_on was set, unset it as it is no longer needed
        if(currentSite%transition_landuse_from_off_to_on) then
           currentSite%transition_landuse_from_off_to_on = .false.
@@ -246,7 +245,7 @@ contains
        call bypass_dynamics(currentSite,bc_out)
 
     end if
-
+    !call TotalBalanceCheck(currentSite,88)
     !******************************************************************************
     ! Reproduction, Recruitment and Cohort Dynamics : controls cohort organization
     !******************************************************************************
@@ -304,7 +303,7 @@ contains
 
        call spawn_patches(currentSite, bc_in)
 
-       call TotalBalanceCheck(currentSite,3)
+       !call TotalBalanceCheck(currentSite,3)
 
        ! fuse on the spawned patches.
        call fuse_patches(currentSite, bc_in )
@@ -319,7 +318,7 @@ contains
        end if
 
        ! SP has changes in leaf carbon but we don't expect them to be in balance.
-       call TotalBalanceCheck(currentSite,4)
+       !call TotalBalanceCheck(currentSite,4)
 
        ! kill patches that are too small
        call terminate_patches(currentSite, bc_in)
@@ -424,6 +423,7 @@ contains
     !-----------------------------------------------------------------------
 
     current_fates_landuse_state_vector = currentSite%get_current_landuse_statevector()
+
 
     
 
@@ -761,7 +761,6 @@ contains
       end do
     end if
 
-
     ! With growth and mortality rates now calculated we can determine the seed rain
     ! fluxes. However, because this is potentially a cross-patch mixing model
     ! we will calculate this as a group
@@ -876,6 +875,27 @@ contains
     currentPatch => currentSite%oldest_patch
     do while(associated(currentPatch))
 
+      !  call currentPatch%CountCohorts()
+      !  if (currentPatch%num_cohorts < 1 .and. associated(currentPatch%younger) &
+      !     .and. (currentPatch%nocomp_pft_label .ne. nocomp_bareground)  .and. (.not.is_restarting) ) then
+      !     write(fates_log(),*) 'MVD aborting on date:',hlm_current_year,hlm_current_month,hlm_current_day
+      !     write(fates_log(),*) 'pa%patchno            = ',currentPatch%patchno
+      !     write(fates_log(),*) 'pa%ncpft              = ',currentPatch%nocomp_pft_label
+      !     write(fates_log(),*) 'pa%uspft              = ',currentSite%use_this_pft(currentPatch%nocomp_pft_label)
+      !     write(fates_log(),*) 'pa%age                = ',currentPatch%age
+      !     write(fates_log(),*) 'pa%age_class          = ',currentPatch%age_class
+      !     write(fates_log(),*) 'pa%area               = ',currentPatch%area
+      !     write(fates_log(),*) 'pa%num_cohorts        = ',currentPatch%num_cohorts
+      !     ! write(fates_log(),*) 'seed mass: ',sum(currentPatch%litter(1)%seed)
+      !     ! write(fates_log(),*) 'seed germ mass: ',sum(currentPatch%litter(1)%seed_germ)
+      !     ! write(fates_log(),*) 'leaf fines(pft): ',sum(currentPatch%litter(1)%leaf_fines)
+      !     ! write(fates_log(),*) 'root fines(pft,sl): ',sum(currentPatch%litter(1)%root_fines)
+      !     ! write(fates_log(),*) 'ag_cwd(c): ',sum(currentPatch%litter(1)%ag_cwd)
+      !     ! write(fates_log(),*) 'bg_cwd(c,sl): ',sum(currentPatch%litter(1)%bg_cwd)
+      !     call endrun(msg=errMsg(sourcefile, __LINE__))
+      !   endif
+
+
        if(.not.is_restarting)then
           call terminate_cohorts(currentSite, currentPatch, 1, 11, bc_in)
           call terminate_cohorts(currentSite, currentPatch, 2, 11, bc_in)
@@ -929,6 +949,7 @@ contains
     bc_out%fire_closs_to_atm_si = sum(site_cmass%burn_flux_to_atm(:)) * area_inv * days_per_sec
     bc_out%grazing_closs_to_atm_si = site_cmass%herbivory_flux_out * area_inv * days_per_sec
 
+
   end subroutine ed_update_site
 
   !-------------------------------------------------------------------------------!
@@ -973,6 +994,7 @@ contains
     real(r8) :: repro_m         ! "" reproduction
     logical  :: l_is_restarting  ! local version of the optional arg
     integer  :: el              ! loop counter for element types
+    integer  :: ncohorts        ! number pf cohorts
 
     ! nb. There is no time associated with these variables
     ! because this routine can be called between any two
@@ -1031,7 +1053,7 @@ contains
        error           = abs(net_flux - change_in_stock)
 
 
-       if(change_in_stock>0.0)then
+       if(abs(total_stock)>0.0)then
           error_frac      = error/abs(total_stock)
        else
           error_frac      = 0.0_r8
@@ -1046,6 +1068,8 @@ contains
           write(fates_log(),*) 'Element index (PARTEH global):',element_list(el)
           write(fates_log(),*) 'net: ',net_flux
           write(fates_log(),*) 'dstock: ',change_in_stock
+          write(fates_log(),*) 'old stock: ', site_mass%old_stock
+          write(fates_log(),*) 'new stock: ', total_stock
           write(fates_log(),*) 'seed_in: ',site_mass%seed_in
           write(fates_log(),*) 'net_root_uptake: ',site_mass%net_root_uptake
           write(fates_log(),*) 'gpp_acc: ',site_mass%gpp_acc
@@ -1079,7 +1103,14 @@ contains
                 write(fates_log(),*) 'BG CWD (by layer): ', sum(litt%bg_cwd,dim=1)
                 write(fates_log(),*) 'leaf litter:',sum(litt%leaf_fines)
                 write(fates_log(),*) 'root litter (by layer): ',sum(litt%root_fines,dim=1)
-                write(fates_log(),*) 'land_use_label: ',currentPatch%land_use_label
+                ncohorts = 0
+                currentCohort => currentPatch%tallest
+                do while(associated(currentCohort))
+                  ncohorts = ncohorts +1
+                    currentCohort => currentCohort%shorter
+                enddo 
+                write(fates_log(),*) 'land_use_label, ncpft, ncoh: ',currentPatch%land_use_label,currentPatch%nocomp_pft_label,ncohorts
+
                 write(fates_log(),*) 'use_this_pft: ', currentSite%use_this_pft(:)
                 if(print_cohorts)then
                     write(fates_log(),*) '---- Biomass by cohort and organ -----'

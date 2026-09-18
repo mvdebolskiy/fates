@@ -1251,7 +1251,6 @@ module FatesPatchMod
 
       ! LOCALS:
       integer :: el  ! element loop counting index
-
       write(fates_log(),*) '----------------------------------------'
       write(fates_log(),*) ' Dumping Patch Information              '
       write(fates_log(),*) ' (omitting arrays)                      '
@@ -1272,6 +1271,7 @@ module FatesPatchMod
       write(fates_log(),*) 'pa%c_lblayer          = ',this%c_lblayer
       write(fates_log(),*) 'pa%disturbance_rates  = ',this%disturbance_rates(:)
       write(fates_log(),*) 'pa%land_use_label     = ',this%land_use_label
+      write(fates_log(),*) 'pa%nocomp_lable       = ',this%nocomp_pft_label
       write(fates_log(),*) '----------------------------------------'
 
       do el = 1, num_elements

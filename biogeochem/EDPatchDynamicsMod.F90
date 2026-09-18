@@ -5,7 +5,7 @@ module EDPatchDynamicsMod
   use FatesGlobals         , only : fates_log
   use FatesGlobals         , only : FatesWarn,N2S,A2S,I2S
   use FatesInterfaceTypesMod, only : hlm_freq_day
-  use FatesInterfaceTypesMod, only : hlm_current_tod
+  use FatesInterfaceTypesMod, only : hlm_current_tod,hlm_current_year,hlm_current_month,hlm_current_day
   use EDPftvarcon          , only : EDPftvarcon_inst
   use EDPftvarcon          , only : GetDecompyFrac
   use PRTParametersMod      , only : prt_params
@@ -3409,6 +3409,8 @@ contains
     !  Terminate Patches if they  are too small                          
     !
     !
+    ! USES
+    use EDCohortDynamicsMod  , only : terminate_cohorts
     ! !ARGUMENTS:
     type(ed_site_type), target, intent(inout) :: currentSite
     type(bc_in_type), intent(in)               :: bc_in
@@ -3419,6 +3421,7 @@ contains
     type(fates_patch_type), pointer :: youngerPatch
     type(fates_patch_type), pointer :: patchpointer
     type(fates_patch_type), pointer :: largest_patch
+    
     integer, parameter           :: max_cycles = 10  ! After 10 loops through
                                                      ! You should had fused
     integer                      :: count_cycles
@@ -3466,7 +3469,7 @@ contains
                            'nocomp pft: '//trim(I2S(currentPatch%nocomp_pft_label))// &
                            'lu label: '//trim(I2S(currentPatch%land_use_label))// &
                            'area: '//trim(N2S(currentPatch%area))
-                call FatesWarn(warn_msg,index=5)
+                !call FatesWarn(warn_msg,index=5)
              endif
 
           else nocomp_if
@@ -3620,19 +3623,35 @@ contains
              patchpointer => currentSite%youngest_patch
              do while(associated(patchpointer))
                 if ( patchpointer%land_use_label .eq. land_use_type_to_remove ) then
-
-                   write(fates_log(),*) 'fusing into patch with types, age, and size of:', largest_patch%land_use_label, &
-                        largest_patch%nocomp_pft_label, largest_patch%age, largest_patch%area
-
-                   write(fates_log(),*) 'fusing away patch with types, age, and size of:', patchpointer%land_use_label, &
-                        patchpointer%nocomp_pft_label, patchpointer%age, patchpointer%area
-
+                   call largest_patch%CountCohorts()
+                   write(fates_log(),*) 'fusing into patch with types, age, size, ncoh:', largest_patch%land_use_label, &
+                        largest_patch%nocomp_pft_label, largest_patch%age, largest_patch%area, largest_patch%num_cohorts
+                   call patchpointer%CountCohorts()
+                   write(fates_log(),*) 'fusing away patch with types, age, size, ncoh:', patchpointer%land_use_label, &
+                        patchpointer%nocomp_pft_label, patchpointer%age, patchpointer%area, patchpointer%num_cohorts
+                   write(fates_log(),*) 'MVD1 largest before fusion:'
+                   call largest_patch%Dump()
+                   write(fates_log(),*) 'MVD1 orphan before fusion:'
+                   call patchpointer%Dump()
                    ! reset the categorical properties of the patch and fuse it into the largest patch
                    patchpointer%land_use_label = largest_patch%land_use_label
                    patchpointer%nocomp_pft_label = largest_patch%nocomp_pft_label
                    patchpointer%age_since_anthro_disturbance = largest_patch%age_since_anthro_disturbance
-                   call fuse_2_patches(currentSite, patchpointer, largest_patch)
+                   !terminate all the cohorts in the tiny orphan patch.
+                   write(fates_log(),*) 'MVD on date:',hlm_current_year,hlm_current_month,hlm_current_day
+                  !  write(fates_log(),*) 'terminating cohorts'
+                  !  call terminate_cohorts(currentSite, patchpointer, 4,31, bc_in)
+                  !  call fuse_cohorts(currentSite,patchpointer, bc_in)
+                  !  call terminate_cohorts(currentSite, patchpointer, 4,31, bc_in)
+                  !  call patchpointer%SortCohorts()
+                  !  call patchpointer%ValidateCohorts()
 
+                   call fuse_2_patches(currentSite, patchpointer, largest_patch)
+                  !  call largest_patch%CountCohorts()
+                  !  write(fates_log(),*) 'MVD2 largest after fusion:'
+                  !  call largest_patch%Dump()
+                  !  write(fates_log(),*) 'after fusing, age, size, ncoh:', largest_patch%land_use_label, &
+                  !       largest_patch%nocomp_pft_label, largest_patch%age, largest_patch%area, largest_patch%num_cohorts
                    ! start over in the loop to make sure we are removing every patch with the targeted land use type
                    patchpointer => currentSite%youngest_patch
 
