@@ -33,7 +33,7 @@ Module FatesTwoStreamUtilsMod
   
   implicit none
 
-  logical, parameter :: debug  = .false. ! local debug flag
+  logical, parameter :: debug  = .true. ! local debug flag
   character(len=*), parameter, private :: sourcefile = &
        __FILE__
 
@@ -160,6 +160,23 @@ contains
          else
             canopy_frac(:) = 0._r8
          end if
+
+         do ican = 1,patch%ncl_p
+            if ( debug .and. ( canopy_frac(ican) < -0.01_r8 .or. canopy_frac(ican) > 1.01_r8) ) then
+                  write(fates_log(),*) 'One of the fates canopy layers has bad fraction'
+                  write(fates_log(),*) 'more than 100% of the area footprint, exceeding a'
+                  write(fates_log(),*) 'precision threshold of 0.01'
+                  write(fates_log(),*) 'Aborting'
+                  write(fates_log(),*) 'canopy layer: ',ican,' canopy_frac:',canopy_frac(ican)
+                  write(fates_log(),*) 'patch total canopy area:', patch%total_canopy_area
+                  cohort => patch%tallest
+                  do while (associated(cohort))
+                     write(fates_log(),*) 'cohort c_area:', cohort%c_area
+                    cohort => cohort%shorter
+                 enddo
+                 call endrun(msg=errMsg(sourcefile, __LINE__))
+            end if
+         end do
 
          ! Add the air element if the canopy area is not filled
          do ican = 1,patch%ncl_p

@@ -1983,7 +1983,7 @@
       "dims": ["scalar"],
       "long_name": "Integer code that options how logging events are structured. Negative: day of the year. 1 - no logging. 2 - only first timestep. 3 - daily. 4 - monthly.",
       "units": "unitless",
-      "data": [3]
+      "data": [1]
     },
     "fates_landuse_logging_export_frac":{
       "dtype": "float",

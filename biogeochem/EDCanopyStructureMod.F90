@@ -67,7 +67,7 @@ module EDCanopyStructureMod
   public :: UpdatePatchLAI
   public :: UpdateCohortLAI
 
-  logical, parameter :: debug=.false.
+  logical, parameter :: debug=.true.
 
   character(len=*), parameter, private :: sourcefile = &
        __FILE__
